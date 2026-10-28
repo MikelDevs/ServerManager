@@ -1,7 +1,9 @@
 import { open } from "@tauri-apps/plugin-dialog";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { ProjectConfig, ProjectInput } from "../types/project";
 import { CloseIcon, FolderIcon, PlusIcon, TrashIcon } from "./Icons";
+import { ProjectIcon } from "./ProjectIcon";
+import { readProjectImage } from "../utils/projectImage";
 
 interface EnvironmentRow { id: string; key: string; value: string; }
 interface ServiceDraft {
@@ -33,7 +35,11 @@ function normalizeUrl(value: string): string | null {
 
 export function ProjectForm({ project, onClose, onSave }: ProjectFormProps) {
   const [name, setName] = useState(project?.name ?? "");
-  const [icon, setIcon] = useState(project?.icon ?? "🚀");
+  const [icon, setIcon] = useState(project?.icon ?? "");
+  const [imageLoading, setImageLoading] = useState(false);
+  const [imageError, setImageError] = useState<string | null>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const imageRequest = useRef(0);
   const [workingDirectory, setWorkingDirectory] = useState(project?.workingDirectory ?? "");
   const [sshIp, setSshIp] = useState(project?.sshIp ?? "");
   const [services, setServices] = useState<ServiceDraft[]>(() => project
@@ -45,10 +51,31 @@ export function ProjectForm({ project, onClose, onSave }: ProjectFormProps) {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape" && !saving && !browsing) onClose(); };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape" && !saving && !browsing && !imageLoading) onClose(); };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, saving, browsing]);
+  }, [onClose, saving, browsing, imageLoading]);
+
+  useEffect(() => () => { imageRequest.current += 1; }, []);
+
+  const chooseImage = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = "";
+    if (!file) return;
+    const request = ++imageRequest.current;
+    setImageLoading(true);
+    setImageError(null);
+    try {
+      const image = await readProjectImage(file);
+      if (request === imageRequest.current) setIcon(image);
+    } catch (error) {
+      if (request === imageRequest.current) {
+        setImageError(error instanceof Error ? error.message : "No se pudo cargar la imagen.");
+      }
+    } finally {
+      if (request === imageRequest.current) setImageLoading(false);
+    }
+  };
 
   const updateService = (key: string, update: Partial<ServiceDraft>) => {
     setServices((current) => current.map((service) => service.key === key ? { ...service, ...update } : service));
@@ -69,7 +96,9 @@ export function ProjectForm({ project, onClose, onSave }: ProjectFormProps) {
     finally { setBrowsing(false); }
   };
   const submit = async (event: FormEvent) => {
-    event.preventDefault(); setSaving(true); setSaveError(null);
+    event.preventDefault();
+    if (saving || imageLoading || browsing) return;
+    setSaving(true); setSaveError(null);
     try {
       if (services.length === 0) throw new Error("Agrega al menos una API o app al proyecto.");
       for (const service of services) {
@@ -86,15 +115,27 @@ export function ProjectForm({ project, onClose, onSave }: ProjectFormProps) {
   };
 
   return (
-    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !saving && !browsing && onClose()}>
+    <div className="modal-backdrop" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && !saving && !browsing && !imageLoading && onClose()}>
       <section className="modal project-modal" role="dialog" aria-modal="true" aria-labelledby="project-form-title">
-        <header className="modal-header"><div><span className="eyebrow">PROYECTO Y SERVICIOS</span><h2 id="project-form-title">{project ? "Editar proyecto" : "Nuevo proyecto"}</h2></div><button className="icon-button" onClick={onClose} disabled={saving || browsing} aria-label="Cerrar"><CloseIcon /></button></header>
+        <header className="modal-header"><div><span className="eyebrow">PROYECTO Y SERVICIOS</span><h2 id="project-form-title">{project ? "Editar proyecto" : "Nuevo proyecto"}</h2></div><button className="icon-button" onClick={onClose} disabled={saving || browsing || imageLoading} aria-label="Cerrar"><CloseIcon /></button></header>
         <form onSubmit={submit}>
           <fieldset className="modal-body" disabled={saving}>
-            <div className="form-grid name-grid">
-              <label className="field icon-field"><span>Icono</span><input value={icon} onChange={(event) => setIcon(event.target.value)} maxLength={8} placeholder="🚀" /></label>
-              <label className="field"><span>Nombre del proyecto</span><input value={name} onChange={(event) => setName(event.target.value)} required autoFocus placeholder="RH" /></label>
+            <div className="project-image-picker" aria-busy={imageLoading}>
+              <ProjectIcon icon={icon || null} name={name} className="project-image-preview" />
+              <div className="project-image-options">
+                <span>Imagen del proyecto</span>
+                <div className="project-image-actions">
+                  <button type="button" className="button button-secondary button-small" onClick={() => imageInput.current?.click()} disabled={imageLoading}>
+                    {imageLoading ? "Cargando…" : icon ? "Cambiar imagen" : "Elegir imagen"}
+                  </button>
+                  {icon && <button type="button" className="button button-ghost button-small" onClick={() => { setIcon(""); setImageError(null); }} disabled={imageLoading}>Quitar</button>}
+                </div>
+                <small>PNG, JPG o WebP · máximo 5 MB</small>
+                <input ref={imageInput} type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => void chooseImage(event)} disabled={imageLoading} aria-label="Seleccionar imagen del proyecto" hidden />
+                {imageError && <small className="field-error" role="alert">{imageError}</small>}
+              </div>
             </div>
+            <label className="field"><span>Nombre del proyecto</span><input value={name} onChange={(event) => setName(event.target.value)} required autoFocus placeholder="RH" /></label>
             <label className="field"><span>Carpeta raíz</span><div className="path-picker"><input value={workingDirectory} onChange={(event) => setWorkingDirectory(event.target.value)} required placeholder="/ruta/a/rh" spellCheck={false} /><button type="button" className="button button-secondary browse-button" onClick={() => void browseWorkingDirectory()} disabled={browsing}><FolderIcon /> {browsing ? "Abriendo…" : "Examinar…"}</button></div>{browseError ? <small className="field-error">No se pudo abrir el selector: {browseError}</small> : <small>Ruta absoluta del proyecto. Abrir Code y Abrir terminal usarán esta carpeta.</small>}</label>
             <label className="field"><span>IP del servidor para SSH <em>opcional</em></span><input className="code-input" value={sshIp} onChange={(event) => setSshIp(event.target.value)} placeholder="203.0.113.10" autoComplete="off" autoCapitalize="none" spellCheck={false} /><small>“Abrir servidor” iniciará ssh root@{sshIp.trim() || "<ip>"} en una terminal.</small></label>
             <div className="services-form-heading"><div><h3>APIs y apps</h3><p>Cada servicio tiene su carpeta, comando y consola.</p></div><span className="service-count">{services.length} servicios</span></div>
@@ -125,7 +166,7 @@ export function ProjectForm({ project, onClose, onSave }: ProjectFormProps) {
             <div className="add-services-actions"><button type="button" className="button button-secondary" onClick={() => setServices((current) => [...current, newService("api", current.filter((service) => service.kind === "api").length + 1)])}><PlusIcon /> Agregar API</button><button type="button" className="button button-secondary" onClick={() => setServices((current) => [...current, newService("app", current.filter((service) => service.kind === "app").length + 1)])}><PlusIcon /> Agregar app</button></div>
           </fieldset>
           {saveError && <p className="form-save-error" role="alert">{saveError}</p>}
-          <footer className="modal-footer"><button type="button" className="button button-secondary" onClick={onClose} disabled={saving || browsing}>Cancelar</button><button type="submit" className="button button-primary" disabled={saving || browsing}>{saving ? "Guardando…" : "Guardar proyecto"}</button></footer>
+          <footer className="modal-footer"><button type="button" className="button button-secondary" onClick={onClose} disabled={saving || browsing || imageLoading}>Cancelar</button><button type="submit" className="button button-primary" disabled={saving || browsing || imageLoading}>{saving ? "Guardando…" : "Guardar proyecto"}</button></footer>
         </form>
       </section>
     </div>

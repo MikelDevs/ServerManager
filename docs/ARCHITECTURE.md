@@ -11,6 +11,11 @@ comandos directamente.
 `name`, `kind` (`api` o `app`), `workingDirectory`, `startCommand`, `stopCommand`,
 `projectUrl` y `environmentVariables`.
 
+`icon` admite una miniatura PNG como data URL, de hasta 256 px por lado y 512 KiB
+serializados. La interfaz convierte la imagen elegida y conserva su proporción;
+Rust limita el tamaño y valida el formato almacenado. Los iconos de texto de las
+versiones anteriores siguen siendo compatibles.
+
 Una ruta relativa de servicio se resuelve contra la raíz del proyecto. Una ruta
 absoluta permite servicios ubicados fuera de ella. La carpeta debe existir al
 iniciar el servicio. La raíz es siempre el destino de Code y de la terminal local.

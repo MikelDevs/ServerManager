@@ -16,6 +16,10 @@ Por ejemplo, registra **RH** con raíz `/ruta/rh` y dos servicios:
 Ajusta los comandos a los scripts reales de cada servicio. Puedes agregar varias
 APIs y apps, usar `.` para ejecutar en la raíz o indicar una ruta absoluta.
 
+Al crear o editar un proyecto puedes elegir una imagen PNG, JPG o WebP de hasta
+5 MB. Se guarda una miniatura dentro de la configuración y se muestra en la lista
+y el encabezado; no depende de conservar el archivo original en su ubicación.
+
 - **Iniciar todo**, **Detener todo** y **Reiniciar todo** actúan sobre los servicios
   del proyecto seleccionado. Un fallo se informa por servicio y no impide intentar
   la operación en los demás. Iniciar todo conserva los servicios que ya están activos.

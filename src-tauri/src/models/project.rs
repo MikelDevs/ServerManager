@@ -95,6 +95,29 @@ impl ProjectInput {
         if self.services.is_empty() {
             return Err("Agrega al menos una API o app al proyecto".into());
         }
+        if let Some(icon) = self.icon.as_deref().map(str::trim) {
+            if icon.len() > 512 * 1024 {
+                return Err(
+                    "La imagen del proyecto es demasiado grande; vuelve a seleccionarla".into(),
+                );
+            }
+            if icon.starts_with("data:") {
+                let png = icon.strip_prefix("data:image/png;base64,");
+                if !png.is_some_and(|data| {
+                    let content = data.trim_end_matches('=');
+                    data.starts_with("iVBORw0KGgo")
+                        && data.len() % 4 == 0
+                        && data.len() - content.len() <= 2
+                        && content.bytes().all(|byte| {
+                            byte.is_ascii_alphanumeric() || byte == b'+' || byte == b'/'
+                        })
+                }) {
+                    return Err(
+                        "La imagen del proyecto no es válida; vuelve a seleccionarla".into(),
+                    );
+                }
+            }
+        }
         if self
             .ssh_ip
             .as_deref()

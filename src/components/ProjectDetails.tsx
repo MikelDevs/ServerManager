@@ -3,6 +3,7 @@ import type { ProcessSnapshot, ProjectConfig, ProjectLogs } from "../types/proje
 import { BrowserIcon, ClockIcon, CodeIcon, EditIcon, FolderIcon, PlayIcon, RestartIcon, ServerIcon, StopIcon, TerminalIcon, TrashIcon } from "./Icons";
 import { LogConsole } from "./LogConsole";
 import { StatusBadge } from "./StatusBadge";
+import { ProjectIcon } from "./ProjectIcon";
 
 interface ProjectDetailsProps {
   project: ProjectConfig;
@@ -69,7 +70,7 @@ export function ProjectDetails({ project, snapshots, logs, busy, busyServices, o
   return (
     <main className="main-panel">
       <header className="project-header">
-        <div className="project-identity"><span className="project-hero-icon">{project.icon || "▰"}</span><div className="project-identity-copy"><div className="project-title-row"><h1>{project.name}</h1><span className="project-service-count">{running}/{project.services.length} activos</span></div><div className="project-path" title={project.workingDirectory}><FolderIcon /> {project.workingDirectory}</div></div></div>
+        <div className="project-identity"><ProjectIcon icon={project.icon} name={project.name} className="project-hero-icon" /><div className="project-identity-copy"><div className="project-title-row"><h1>{project.name}</h1><span className="project-service-count">{running}/{project.services.length} activos</span></div><div className="project-path" title={project.workingDirectory}><FolderIcon /> {project.workingDirectory}</div></div></div>
         <div className="header-actions">
           <button className="button button-secondary button-small" onClick={() => run(onOpenInCode)} title="Abrir la raíz del proyecto en Visual Studio Code" disabled={busy}><CodeIcon /> Abrir Code</button>
           <button className="button button-secondary button-small" onClick={() => run(onOpenTerminal)} title="Abrir una terminal en la raíz del proyecto" disabled={busy}><TerminalIcon /> Abrir terminal</button>

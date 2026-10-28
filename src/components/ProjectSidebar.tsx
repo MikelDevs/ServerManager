@@ -1,6 +1,7 @@
 import type { ProcessSnapshot, ProjectConfig } from "../types/project";
 import { PlayIcon, PlusIcon, StopIcon } from "./Icons";
 import { StatusBadge } from "./StatusBadge";
+import { ProjectIcon } from "./ProjectIcon";
 
 interface ProjectSidebarProps {
   projects: ProjectConfig[];
@@ -64,7 +65,7 @@ export function ProjectSidebar({
               key={project.id}
               onClick={() => onSelect(project.id)}
             >
-              <span className="project-icon">{project.icon || "▰"}</span>
+              <ProjectIcon icon={project.icon} name={project.name} className="project-icon" />
               <span className="project-list-copy">
                 <strong>{project.name}</strong>
                 <small>{stopping ? "Deteniendo…" : `${running}/${project.services.length} servicios activos`}</small>
