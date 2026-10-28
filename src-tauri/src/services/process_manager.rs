@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::Path, process::Stdio, sync::Arc, time::Duration};
 
 use chrono::Utc;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Runtime};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWriteExt},
     process::{Child, ChildStdin, Command},
@@ -11,7 +11,7 @@ use tokio::{
 
 use crate::models::{
     OutputStream, ProcessOutputEvent, ProcessSnapshot, ProcessStateEvent, ProcessStatus,
-    ProjectConfig,
+    ServiceConfig,
 };
 
 const GRACEFUL_INPUT_TIMEOUT: Duration = Duration::from_secs(10);
@@ -30,14 +30,16 @@ type SharedProcess = Arc<Mutex<ManagedProcess>>;
 
 #[derive(Clone, Default)]
 pub struct ProcessManager {
+    /// Serializes configuration changes and lifecycle commands so active services cannot be orphaned.
+    pub operation_lock: Arc<Mutex<()>>,
     processes: Arc<Mutex<HashMap<String, SharedProcess>>>,
 }
 
 impl ProcessManager {
-    pub async fn start(
+    pub async fn start<R: Runtime>(
         &self,
-        app: AppHandle,
-        project: ProjectConfig,
+        app: AppHandle<R>,
+        project: ServiceConfig,
     ) -> Result<ProcessSnapshot, String> {
         let working_directory = Path::new(&project.working_directory);
         if !working_directory.is_dir() {
@@ -103,7 +105,7 @@ impl ProcessManager {
         self.spawn_exit_watcher(app.clone(), project.id.clone(), session);
 
         let snapshot = ProcessSnapshot {
-            project_id: project.id.clone(),
+            service_id: project.id.clone(),
             status: ProcessStatus::Running,
             pid: Some(pid),
             started_at: Some(started_at.clone()),
@@ -111,7 +113,7 @@ impl ProcessManager {
         emit_state(
             &app,
             ProcessStateEvent {
-                project_id: project.id,
+                service_id: project.id,
                 status: ProcessStatus::Running,
                 pid: Some(pid),
                 started_at: Some(started_at),
@@ -122,7 +124,11 @@ impl ProcessManager {
         Ok(snapshot)
     }
 
-    pub async fn stop(&self, app: AppHandle, project: ProjectConfig) -> Result<(), String> {
+    pub async fn stop<R: Runtime>(
+        &self,
+        app: AppHandle<R>,
+        project: ServiceConfig,
+    ) -> Result<(), String> {
         let session = self
             .get_session(&project.id)
             .await
@@ -163,7 +169,7 @@ impl ProcessManager {
         emit_state(
             &app,
             ProcessStateEvent {
-                project_id: project.id.clone(),
+                service_id: project.id.clone(),
                 status: ProcessStatus::Stopping,
                 pid: Some(pid),
                 started_at: Some(started_at),
@@ -223,11 +229,11 @@ impl ProcessManager {
         }
     }
 
-    pub async fn send_input(&self, project_id: &str, input: &str) -> Result<(), String> {
+    pub async fn send_input(&self, service_id: &str, input: &str) -> Result<(), String> {
         let session = self
-            .get_session(project_id)
+            .get_session(service_id)
             .await
-            .ok_or_else(|| "El proyecto no está en ejecución".to_string())?;
+            .ok_or_else(|| "El servicio no está en ejecución".to_string())?;
         let mut process = session.lock().await;
         if process.status != ProcessStatus::Running {
             return Err("El proceso se está deteniendo y ya no acepta comandos".into());
@@ -245,27 +251,32 @@ impl ProcessManager {
             .map_err(|error| format!("No se pudo vaciar stdin: {error}"))
     }
 
-    pub async fn is_running(&self, project_id: &str) -> bool {
-        self.processes.lock().await.contains_key(project_id)
+    pub async fn is_running(&self, service_id: &str) -> bool {
+        self.processes.lock().await.contains_key(service_id)
     }
 
-    pub async fn snapshot(&self, project_id: &str) -> ProcessSnapshot {
-        let session = self.get_session(project_id).await;
+    pub async fn snapshot(&self, service_id: &str) -> ProcessSnapshot {
+        let session = self.get_session(service_id).await;
         match session {
             Some(session) => {
                 let process = session.lock().await;
                 ProcessSnapshot {
-                    project_id: project_id.to_owned(),
+                    service_id: service_id.to_owned(),
                     status: process.status,
                     pid: Some(process.pid),
                     started_at: Some(process.started_at.clone()),
                 }
             }
-            None => stopped_snapshot(project_id),
+            None => stopped_snapshot(service_id),
         }
     }
 
-    fn spawn_exit_watcher(&self, app: AppHandle, project_id: String, session: SharedProcess) {
+    fn spawn_exit_watcher<R: Runtime>(
+        &self,
+        app: AppHandle<R>,
+        service_id: String,
+        session: SharedProcess,
+    ) {
         let manager = self.clone();
         tauri::async_runtime::spawn(async move {
             let (exit_code, error_message) = loop {
@@ -285,21 +296,21 @@ impl ProcessManager {
 
             let mut processes = manager.processes.lock().await;
             let should_remove = processes
-                .get(&project_id)
+                .get(&service_id)
                 .is_some_and(|current| Arc::ptr_eq(current, &session));
             if should_remove {
-                processes.remove(&project_id);
+                processes.remove(&service_id);
             }
-            drop(processes);
-
             let message = error_message.unwrap_or_else(|| match exit_code {
                 Some(code) => format!("Proceso finalizado con código {code}"),
                 None => "Proceso finalizado por una señal del sistema".into(),
             });
+            // Publish stopped before releasing the map lock so a restart cannot emit
+            // running first and then receive this old session's stopped event.
             emit_state(
                 &app,
                 ProcessStateEvent {
-                    project_id,
+                    service_id,
                     status: ProcessStatus::Stopped,
                     pid: None,
                     started_at: None,
@@ -307,28 +318,29 @@ impl ProcessManager {
                     message: Some(message),
                 },
             );
+            drop(processes);
         });
     }
 
-    async fn get_session(&self, project_id: &str) -> Option<SharedProcess> {
-        self.processes.lock().await.get(project_id).cloned()
+    async fn get_session(&self, service_id: &str) -> Option<SharedProcess> {
+        self.processes.lock().await.get(service_id).cloned()
     }
 
-    async fn wait_until_stopped(&self, project_id: &str, timeout: Duration) -> bool {
+    async fn wait_until_stopped(&self, service_id: &str, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
-            if !self.is_running(project_id).await {
+            if !self.is_running(service_id).await {
                 return true;
             }
             sleep(Duration::from_millis(100)).await;
         }
-        !self.is_running(project_id).await
+        !self.is_running(service_id).await
     }
 }
 
-fn stopped_snapshot(project_id: &str) -> ProcessSnapshot {
+fn stopped_snapshot(service_id: &str) -> ProcessSnapshot {
     ProcessSnapshot {
-        project_id: project_id.to_owned(),
+        service_id: service_id.to_owned(),
         status: ProcessStatus::Stopped,
         pid: None,
         started_at: None,
@@ -343,8 +355,12 @@ fn line_for_stdin(input: &str) -> String {
     }
 }
 
-fn spawn_output_reader<R>(app: AppHandle, project_id: String, stream: OutputStream, mut reader: R)
-where
+fn spawn_output_reader<R, T: Runtime>(
+    app: AppHandle<T>,
+    service_id: String,
+    stream: OutputStream,
+    mut reader: R,
+) where
     R: AsyncRead + Unpin + Send + 'static,
 {
     tauri::async_runtime::spawn(async move {
@@ -354,14 +370,14 @@ where
                 Ok(0) => break,
                 Ok(read) => emit_output(
                     &app,
-                    &project_id,
+                    &service_id,
                     stream,
                     String::from_utf8_lossy(&buffer[..read]).into_owned(),
                 ),
                 Err(error) => {
                     emit_output(
                         &app,
-                        &project_id,
+                        &service_id,
                         OutputStream::System,
                         format!("Error leyendo la salida: {error}\n"),
                     );
@@ -372,11 +388,16 @@ where
     });
 }
 
-fn emit_output(app: &AppHandle, project_id: &str, stream: OutputStream, chunk: String) {
+fn emit_output<R: Runtime>(
+    app: &AppHandle<R>,
+    service_id: &str,
+    stream: OutputStream,
+    chunk: String,
+) {
     let _ = app.emit(
         "process-output",
         ProcessOutputEvent {
-            project_id: project_id.to_owned(),
+            service_id: service_id.to_owned(),
             stream,
             chunk,
             timestamp: Utc::now().to_rfc3339(),
@@ -384,12 +405,12 @@ fn emit_output(app: &AppHandle, project_id: &str, stream: OutputStream, chunk: S
     );
 }
 
-fn emit_state(app: &AppHandle, event: ProcessStateEvent) {
+fn emit_state<R: Runtime>(app: &AppHandle<R>, event: ProcessStateEvent) {
     let _ = app.emit("process-state", event);
 }
 
 #[cfg(unix)]
-fn platform_command(project: &ProjectConfig) -> Result<Command, String> {
+fn platform_command(project: &ServiceConfig) -> Result<Command, String> {
     let mut command = Command::new("/bin/sh");
     command.args(["-lc", &format!("exec {}", project.start_command)]);
     unsafe {
@@ -404,7 +425,7 @@ fn platform_command(project: &ProjectConfig) -> Result<Command, String> {
 }
 
 #[cfg(windows)]
-fn platform_command(project: &ProjectConfig) -> Result<Command, String> {
+fn platform_command(project: &ServiceConfig) -> Result<Command, String> {
     use std::os::windows::process::CommandExt;
 
     const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;

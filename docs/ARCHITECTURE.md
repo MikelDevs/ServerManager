@@ -1,93 +1,70 @@
-# Server Manager — arquitectura V1
+# Server Manager — arquitectura 0.4.0
 
-## Objetivo
+## Modelo
 
-Aplicación de escritorio para macOS, Windows y Linux que registra proyectos locales,
-ejecuta varios procesos simultáneamente y conserva acceso a `stdin`, `stdout` y
-`stderr` de cada uno.
+Tauri 2 mantiene los procesos en Rust; React/TypeScript presenta proyectos,
+servicios, estados y consolas. La interfaz invoca acciones por ID y no ejecuta
+comandos directamente.
 
-La V1 usa Tauri 2: React/TypeScript presenta la interfaz y Rust es el único dueño de
-los procesos. La interfaz nunca ejecuta comandos directamente.
+`ProjectConfig` contiene `id`, `name`, `icon`, `workingDirectory` (raíz absoluta),
+`sshIp`, fechas y `services`. Cada `ServiceConfig` contiene un ID global único,
+`name`, `kind` (`api` o `app`), `workingDirectory`, `startCommand`, `stopCommand`,
+`projectUrl` y `environmentVariables`.
 
-## Estructura
+Una ruta relativa de servicio se resuelve contra la raíz del proyecto. Una ruta
+absoluta permite servicios ubicados fuera de ella. La carpeta debe existir al
+iniciar el servicio. La raíz es siempre el destino de Code y de la terminal local.
 
-```text
-src/
-  components/             Interfaz y formularios
-  stores/                 Estado de UI y puente con comandos/eventos Tauri
-  types/                  Contratos TypeScript compartidos con Rust
-src-tauri/src/
-  commands/               API invocable por la interfaz
-  models/                 Configuración persistente y estado de ejecución
-  services/
-    project_repository.rs Persistencia JSON atómica
-    process_manager.rs    Ciclo de vida, stdin y captura de salida
-  state.rs                Estado global de la aplicación
-  main.rs                 Ventana, bandeja y composición
-```
+## Persistencia y compatibilidad
 
-## Modelo persistente
+`ProjectRepository` guarda `projects.json` en el directorio de configuración de
+la aplicación. Las escrituras se realizan mediante un archivo temporal y reemplazo.
+Al cargar el formato anterior se conserva un respaldo antes de escribir la nueva
+configuración. La migración conserva las configuraciones de ejecución y la
+identidad de los servicios, y agrupa pares API/App solo cuando la raíz, el nombre
+y las IP SSH permiten hacerlo sin ambigüedad.
 
-`ProjectConfig` contiene:
+La edición valida rutas, comandos, URLs, IP y IDs de servicios. No se permite
+editar o eliminar un proyecto mientras alguno de sus servicios esté activo. Así
+se evita perder la configuración necesaria para detenerlo o reasignar un proceso
+en ejecución a otro servicio.
 
-- `id`, `name` e `icon`.
-- `workingDirectory`.
-- `startCommand`.
-- `stopCommand`: texto que se escribe en `stdin` al detener, por ejemplo `stop`.
-- `projectUrl`: URL web opcional para React, Vite u otra aplicación local.
-- `environmentVariables`.
-- Fechas de creación y modificación.
+## Ejecución y eventos
 
-La carpeta de trabajo se selecciona mediante el diálogo nativo del sistema. El campo
-permanece editable para permitir pegar rutas conocidas o ajustar configuraciones.
-Las acciones externas reciben solo el ID del proyecto: Rust resuelve la carpeta o URL
-persistida antes de abrir Visual Studio Code o el navegador predeterminado.
+`ProcessManager` mantiene una sesión por `serviceId` con proceso hijo, stdin,
+PID, hora de inicio y estado. `process-output` y `process-state` incluyen ese ID;
+el frontend mantiene estados y buffers de logs independientes por servicio.
 
-Se guarda como `projects.json` dentro del directorio de configuración de la
-aplicación. La escritura usa un archivo temporal y después lo reemplaza para evitar
-configuraciones truncadas.
+- `start_service`, `stop_service`, `restart_service` y `send_input` operan por
+  `serviceId`.
+- `start_project`, `stop_project` y `restart_project` resuelven todos los servicios
+  del `projectId` seleccionado.
+- `start_all` y `stop_all` recorren todos los proyectos.
+- Las operaciones de grupo devuelven un resultado por servicio, identifican fallos
+  parciales y omiten los servicios ya en el estado solicitado.
 
-## Estado de ejecución
+Los servicios de un grupo se lanzan de forma concurrente. El arranque indica que
+se creó el proceso, no que su endpoint HTTP ya esté disponible; no hay comprobación
+de salud ni orden de dependencias entre APIs y apps.
 
-`ProcessManager` mantiene en memoria una sesión independiente por ID de proyecto:
+Los controles de ciclo de vida se coordinan con la edición para evitar arranques,
+paradas y cambios de configuración incompatibles. En Unix cada proceso tiene un
+grupo propio para terminar sus descendientes. En Windows se usa un grupo de proceso
+y `taskkill /T` como alternativa de parada.
 
-```text
-Project ID -> Child process + stdin + PID + startedAt + status
-```
+## Integraciones
 
-`stdout` y `stderr` se leen en tareas independientes y se publican como eventos
-`process-output`. Los cambios de estado se publican como `process-state`. React se
-suscribe a ambos eventos y limita el buffer visual para evitar crecimiento sin
-límite.
+- `open_project_in_code(projectId)` abre la raíz en VS Code.
+- `open_project_terminal(projectId)` abre una terminal local en esa raíz.
+- `open_ssh_terminal(projectId)` abre SSH a la IP validada del proyecto.
+- `open_service_url(serviceId)` abre la URL HTTP(S) validada del servicio.
 
-## Flujo Start / Stop / Restart
+Las rutas se pasan como argumentos y se protegen de interpretación por el shell.
+Las terminales locales y sesiones SSH son externas al administrador de procesos.
 
-1. `start_project` consulta la configuración persistente.
-2. Valida que la carpeta exista y crea un shell en ese directorio.
-3. Conecta las tres tuberías, registra la sesión y emite estado `running`.
-4. Dos tareas transmiten stdout/stderr y otra observa la salida del proceso.
-5. `send_input` escribe una línea en stdin.
-6. `stop_project` marca `stopping` y, si existe, envía `stopCommand` por stdin.
-7. Espera una salida limpia; después aplica terminación y finalmente terminación
-   forzada si el proceso no responde.
-8. `restart_project` espera a que Stop termine antes de ejecutar Start.
+## Ventana y salida
 
-En Unix el proceso se inicia en un grupo propio para poder terminar también sus
-descendientes. En Windows se crea un grupo nuevo y el fallback usa `taskkill /T`.
-
-## Cierre de ventana y salida
-
-- Cerrar la ventana la oculta; el backend y los servidores continúan activos.
-- La bandeja permite restaurar la ventana, detener todos o salir.
-- Salir (incluido Cmd/Ctrl+Q) ejecuta Stop All antes de terminar la aplicación.
-- Un cierre forzado del proceso principal no ofrece garantías. Hacer que los
-  servidores sobrevivan a la salida total requerirá un daemon independiente.
-
-## Extensiones previstas
-
-- Métricas CPU/RAM: proveedor de métricas asociado a cada PID/grupo.
-- Búsqueda e historial: reemplazar el buffer de UI por un `LogStore` persistente.
-- Comandos rápidos: colección persistente que reutiliza `send_input`.
-- Autostart y perfiles: servicios sobre el repositorio, sin cambiar ProcessManager.
-- Daemon: mover ProcessManager a un proceso separado y conservar esta API como
-  cliente IPC.
+Cerrar la ventana la oculta. La bandeja permite mostrarla, detener todos los
+servicios o salir. La salida normal intenta detener todos los procesos antes de
+cerrar la aplicación. Un cierre forzado no ofrece esas garantías; la continuidad
+independiente requeriría un daemon.

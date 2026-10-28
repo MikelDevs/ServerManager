@@ -10,6 +10,7 @@ interface ProjectSidebarProps {
   onCreate: () => void;
   onStartAll: () => void;
   onStopAll: () => void;
+  busy?: boolean;
 }
 
 export function ProjectSidebar({
@@ -20,10 +21,11 @@ export function ProjectSidebar({
   onCreate,
   onStartAll,
   onStopAll,
+  busy = false,
 }: ProjectSidebarProps) {
-  const runningCount = projects.filter(
-    (project) => snapshots[project.id]?.status === "running",
-  ).length;
+  const services = projects.flatMap((project) => project.services);
+  const runningCount = services.filter((service) => snapshots[service.id]?.status === "running").length;
+  const activeCount = services.filter((service) => snapshots[service.id] && snapshots[service.id].status !== "stopped").length;
 
   return (
     <aside className="sidebar">
@@ -31,16 +33,16 @@ export function ProjectSidebar({
         <div className="brand-mark"><span /></div>
         <div>
           <strong>Server Manager</strong>
-          <small>{runningCount} de {projects.length} activos</small>
+          <small>{runningCount} de {services.length} servicios activos</small>
         </div>
       </div>
 
       <div className="global-actions">
-        <button className="button button-primary button-small" onClick={onStartAll} disabled={projects.length === 0}>
-          <PlayIcon /> Start All
+        <button className="button button-primary button-small" onClick={onStartAll} disabled={services.length === 0 || runningCount === services.length || busy}>
+          <PlayIcon /> Iniciar proyectos
         </button>
-        <button className="button button-secondary button-small" onClick={onStopAll} disabled={runningCount === 0}>
-          <StopIcon /> Stop All
+        <button className="button button-secondary button-small" onClick={onStopAll} disabled={activeCount === 0 || busy}>
+          <StopIcon /> Detener proyectos
         </button>
       </div>
 
@@ -53,7 +55,9 @@ export function ProjectSidebar({
 
       <nav className="project-list" aria-label="Proyectos">
         {projects.map((project) => {
-          const status = snapshots[project.id]?.status ?? "stopped";
+          const running = project.services.filter((service) => snapshots[service.id]?.status === "running").length;
+          const stopping = project.services.some((service) => snapshots[service.id]?.status === "stopping");
+          const status = stopping ? "stopping" : running > 0 ? "running" : "stopped";
           return (
             <button
               className={`project-list-item${selectedId === project.id ? " selected" : ""}`}
@@ -63,7 +67,7 @@ export function ProjectSidebar({
               <span className="project-icon">{project.icon || "▰"}</span>
               <span className="project-list-copy">
                 <strong>{project.name}</strong>
-                <small>{status === "running" ? `PID ${snapshots[project.id]?.pid}` : status}</small>
+                <small>{stopping ? "Deteniendo…" : `${running}/${project.services.length} servicios activos`}</small>
               </span>
               <StatusBadge status={status} compact />
             </button>
@@ -81,6 +85,7 @@ export function ProjectSidebar({
       <button className="new-project-button" onClick={onCreate}>
         <PlusIcon /> Nuevo proyecto
       </button>
+      <div className="sidebar-version">Server Manager · 0.4.0</div>
     </aside>
   );
 }

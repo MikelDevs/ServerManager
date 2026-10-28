@@ -1,34 +1,40 @@
 export type ProcessStatus = "running" | "stopping" | "stopped";
 export type OutputStream = "stdout" | "stderr" | "system";
+export type ServiceKind = "api" | "app";
 
-export interface ProjectConfig {
-  id: string;
+export interface ServiceInput {
+  id?: string;
   name: string;
+  kind: ServiceKind;
   workingDirectory: string;
   startCommand: string;
   stopCommand: string | null;
   projectUrl: string | null;
-  sshIp: string | null;
   environmentVariables: Record<string, string>;
-  icon: string | null;
-  createdAt: string;
-  updatedAt: string;
+}
+
+export interface ServiceConfig extends ServiceInput {
+  id: string;
 }
 
 export interface ProjectInput {
   id?: string;
   name: string;
   workingDirectory: string;
-  startCommand: string;
-  stopCommand: string | null;
-  projectUrl: string | null;
   sshIp: string | null;
-  environmentVariables: Record<string, string>;
   icon: string | null;
+  services: ServiceInput[];
+}
+
+export interface ProjectConfig extends ProjectInput {
+  id: string;
+  services: ServiceConfig[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ProcessSnapshot {
-  projectId: string;
+  serviceId: string;
   status: ProcessStatus;
   pid: number | null;
   startedAt: string | null;
@@ -40,14 +46,14 @@ export interface ProcessStateEvent extends ProcessSnapshot {
 }
 
 export interface ProcessOutputEvent {
-  projectId: string;
+  serviceId: string;
   stream: OutputStream;
   chunk: string;
   timestamp: string;
 }
 
 export interface ActionResult {
-  projectId: string;
+  serviceId: string;
   ok: boolean;
   message: string;
 }

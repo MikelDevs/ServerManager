@@ -42,26 +42,33 @@ export default function App() {
         selectedId={manager.selectedId}
         onSelect={manager.setSelectedId}
         onCreate={createProject}
-        onStartAll={() => void manager.startAll()}
-        onStopAll={() => void manager.stopAll()}
+        busy={manager.busy}
+        onStartAll={() => void manager.startAll().catch(() => {})}
+        onStopAll={() => void manager.stopAll().catch(() => {})}
       />
 
       {manager.selectedProject ? (
         <ProjectDetails
+          key={manager.selectedProject.id}
           project={manager.selectedProject}
-          snapshot={manager.snapshots[manager.selectedProject.id]}
-          logs={manager.logs[manager.selectedProject.id] ?? []}
+          snapshots={manager.snapshots}
+          logs={manager.logs}
           busy={manager.busyProjects.has(manager.selectedProject.id)}
+          busyServices={manager.busyServices}
           onStart={() => manager.startProject(manager.selectedProject!.id)}
           onStop={() => manager.stopProject(manager.selectedProject!.id)}
           onRestart={() => manager.restartProject(manager.selectedProject!.id)}
-          onSendInput={(input) => manager.sendInput(manager.selectedProject!.id, input)}
-          onClearLogs={() => manager.clearLogs(manager.selectedProject!.id)}
+          onStartService={manager.startService}
+          onStopService={manager.stopService}
+          onRestartService={manager.restartService}
+          onSendInput={manager.sendInput}
+          onClearLogs={manager.clearLogs}
           onEdit={editProject}
-          onDelete={() => void deleteSelectedProject()}
+          onDelete={() => void deleteSelectedProject().catch(() => {})}
           onOpenInCode={() => manager.openInCode(manager.selectedProject!.id)}
-          onOpenUrl={() => manager.openProjectUrl(manager.selectedProject!.id)}
+          onOpenUrl={manager.openServiceUrl}
           onOpenTerminal={() => manager.openProjectTerminal(manager.selectedProject!.id)}
+          onOpenServer={() => manager.openProjectServer(manager.selectedProject!.id)}
         />
       ) : (
         <EmptyState onCreate={createProject} />

@@ -9,7 +9,7 @@ export function EmptyState({ onCreate }: { onCreate: () => void }) {
       </div>
       <span className="eyebrow">LISTO PARA COMENZAR</span>
       <h1>Administra tus proyectos<br />desde un solo lugar.</h1>
-      <p>Registra un servidor o aplicación local para controlar su proceso, ver sus logs y enviar comandos en tiempo real.</p>
+      <p>Agrupa las APIs y apps de cada proyecto. Inícialas juntas, consulta sus consolas y abre tu carpeta de trabajo o servidor.</p>
       <button className="button button-primary" onClick={onCreate}><PlusIcon /> Crear primer proyecto</button>
     </main>
   );

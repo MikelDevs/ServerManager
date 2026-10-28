@@ -348,3 +348,71 @@ input:focus-visible {
   .config-summary { grid-template-columns: 1fr 1fr; }
   .config-summary > div:last-child { grid-column: 1 / -1; }
 }
+
+/* Project groups and independent service consoles. */
+.global-actions { grid-template-columns: 1fr; gap: 6px; }
+.global-actions .button { justify-content: flex-start; padding-left: 15px; }
+.sidebar-version { margin-top: 13px; color: var(--faint); font-size: 9px; text-align: center; }
+.project-identity-copy { min-width: 0; }
+.project-identity { max-width: 100%; }
+.project-title-row { flex-wrap: wrap; gap: 7px 12px; }
+.project-title-row h1 { max-width: 100%; }
+.project-service-count { color: var(--muted); font-size: 11px; white-space: nowrap; }
+.header-actions { flex-wrap: wrap; gap: 5px; }
+.project-controls { flex-wrap: wrap; align-items: center; gap: 10px; }
+.project-controls .process-actions { flex-wrap: wrap; }
+.group-action-hint { color: var(--faint); font-size: 10px; overflow-wrap: anywhere; }
+.services-section { flex-shrink: 0; margin-top: 22px; }
+.services-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 9px; }
+.services-heading > span { color: #8b98a5; font-size: 9px; font-weight: 750; letter-spacing: 0.12em; }
+.services-heading small { color: var(--faint); font-size: 10px; }
+.service-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; max-height: 166px; overflow-y: auto; }
+.service-card { display: flex; min-width: 0; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; background: #111820; color: var(--text); text-align: left; cursor: pointer; }
+.service-card:hover { border-color: #43515f; background: #16212b; }
+.service-card.selected { border-color: #3e7258; background: #14231e; box-shadow: inset 0 0 0 1px rgba(85, 209, 139, 0.08); }
+.service-kind { display: inline-flex; min-width: 34px; height: 24px; flex-shrink: 0; align-items: center; justify-content: center; padding: 0 6px; border: 1px solid #34465e; border-radius: 5px; color: #8db8f8; background: #1a2739; font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; font-weight: 700; }
+.service-kind-app { border-color: #4a3d61; background: #281e37; color: #c0a6ed; }
+.service-card-copy { flex: 1; min-width: 0; }
+.service-card-copy strong, .service-card-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.service-card-copy strong { font-size: 12px; font-weight: 650; }
+.service-card-copy small { margin-top: 4px; color: var(--muted); font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+.service-card .status-badge { min-height: 22px; padding: 0 7px; font-size: 8px; gap: 5px; }
+.service-detail { display: flex; min-height: 345px; flex: 1; flex-direction: column; margin-top: 20px; }
+.service-detail-header { display: flex; align-items: center; flex-wrap: wrap; justify-content: space-between; gap: 10px; }
+.service-detail-header h2 { margin: 0 0 5px; color: #dce5ec; font-size: 14px; font-weight: 650; }
+.service-runtime { display: flex; align-items: center; gap: 6px; color: var(--muted); font-family: "SFMono-Regular", Consolas, monospace; font-size: 9px; }
+.service-runtime svg { width: 11px; height: 11px; }
+.service-actions { flex-wrap: wrap; gap: 5px; }
+.service-detail .config-summary { margin-top: 10px; }
+.console-title { min-width: 0; }
+.console-title > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.console-title > svg, .console-title > small { flex-shrink: 0; }
+
+/* One form owns a project and its API/app configuration. */
+.project-modal { width: min(700px, 100%); }
+fieldset.modal-body { min-height: 0; min-width: 0; margin: 0; border: 0; }
+.modal-body > * { flex-shrink: 0; }
+.field select { width: 100%; height: 37px; padding: 0 10px; border: 1px solid #2c3945; border-radius: 7px; outline: 0; background: #0c1218; color: #dfe6eb; font: inherit; font-size: 12px; }
+.field select:focus { border-color: #497096; box-shadow: 0 0 0 3px rgba(73, 112, 150, 0.12); }
+select:focus-visible, summary:focus-visible { outline: 2px solid rgba(113, 167, 255, 0.8); outline-offset: 2px; }
+.services-form-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 4px; }
+.services-form-heading h3 { margin: 0; font-size: 13px; font-weight: 650; }
+.services-form-heading p { margin: 5px 0 0; color: var(--muted); font-size: 10px; }
+.service-count { color: var(--faint); font-size: 10px; white-space: nowrap; }
+.service-editor { overflow: hidden; border: 1px solid #2c3945; border-radius: 9px; background: #10171e; }
+.service-editor-heading { display: flex; align-items: center; gap: 9px; padding: 9px 12px; border-bottom: 1px solid var(--border-soft); background: #18212a; }
+.service-editor-heading strong { min-width: 0; flex: 1; overflow-wrap: anywhere; font-size: 12px; font-weight: 650; }
+.service-editor-body { display: flex; flex-direction: column; gap: 13px; padding: 14px; }
+.service-name-grid { grid-template-columns: 110px minmax(0, 1fr); }
+.service-advanced { border-top: 1px solid var(--border-soft); padding-top: 10px; }
+.service-advanced > summary { color: #9caebb; cursor: pointer; font-size: 11px; }
+.service-advanced > .field { margin: 15px 0; }
+.service-advanced .environment-section { margin-top: 12px; }
+.add-services-actions { display: flex; justify-content: center; gap: 9px; }
+.add-services-actions .button { flex: 1; border-style: dashed; }
+
+@media (max-width: 980px) {
+  .service-list { grid-template-columns: 1fr; }
+  .project-controls .button { padding: 0 10px; font-size: 11px; }
+  .service-card { padding: 9px 11px; }
+}

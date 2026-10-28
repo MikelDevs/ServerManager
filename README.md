@@ -1,39 +1,53 @@
-# Server Manager
+# Server Manager 0.4.0
 
-Project Launcher / Server Manager de escritorio para macOS, Windows y Linux.
-Permite registrar proyectos locales, ejecutar varios a la vez, consultar sus logs en
-tiempo real y enviar comandos a `stdin`.
+Aplicación de escritorio para macOS, Windows y Linux que agrupa las APIs y apps
+locales bajo un solo proyecto. Cada servicio tiene su carpeta, comandos, variables,
+URL, proceso y consola independientes.
 
-## V1
+## Un proyecto, varios servicios
 
-- Alta, edición y eliminación de proyectos.
-- Carpeta de trabajo, comando de inicio, parada por stdin, entorno e icono.
-- Procesos simultáneos con PID y tiempo activo.
-- Start, Stop, Restart, Start All y Stop All.
-- Consola separada para stdout/stderr y entrada manual.
-- Acciones para abrir la carpeta en Visual Studio Code y la URL web en el navegador.
-- IP para SSH opcional por proyecto. El botón Abrir terminal, junto a Abrir app,
-  ejecuta `ssh root@<ip>` con la IP guardada de ese proyecto.
-- Persistencia local en `projects.json` dentro de la configuración de la aplicación.
-- La ventana se oculta al cerrarla; los procesos siguen administrados desde la bandeja.
-- “Detener y salir” detiene los procesos antes de cerrar la aplicación.
+Por ejemplo, registra **RH** con raíz `/ruta/rh` y dos servicios:
 
-La estructura y las decisiones de diseño están en
-[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+| Servicio | Tipo | Carpeta | Inicio |
+| --- | --- | --- | --- |
+| API | API | `api` | `npm run dev` |
+| App | App | `app` | `npm run dev` |
 
-## Requisitos de desarrollo
+Ajusta los comandos a los scripts reales de cada servicio. Puedes agregar varias
+APIs y apps, usar `.` para ejecutar en la raíz o indicar una ruta absoluta.
 
-- Node.js 18 o posterior.
-- Rust estable mediante [rustup](https://rustup.rs/).
-- Dependencias de sistema de Tauri 2 para la plataforma objetivo.
+- **Iniciar todo**, **Detener todo** y **Reiniciar todo** actúan sobre los servicios
+  del proyecto seleccionado. Un fallo se informa por servicio y no impide intentar
+  la operación en los demás. Iniciar todo conserva los servicios que ya están activos.
+- Cada servicio también tiene controles individuales, PID, tiempo activo, logs
+  `stdout`/`stderr` y entrada manual a `stdin`.
+- **Abrir Code** abre la carpeta raíz del proyecto en Visual Studio Code.
+- **Abrir terminal** abre una terminal local en la carpeta raíz.
+- **Abrir servidor** ejecuta `ssh root@<ip>` con la IP guardada en el proyecto.
+- **Abrir app** abre la URL del servicio seleccionado en el navegador.
+- Las acciones globales de la barra lateral controlan todos los proyectos.
+- Detén todos los servicios de un proyecto antes de editarlo o eliminarlo.
 
-Después de instalar Rust, abre una terminal nueva o carga su entorno:
+La ventana se oculta al cerrarla; los procesos siguen administrados desde la
+bandeja. **Detener y salir** detiene los servicios antes de cerrar la aplicación.
 
-```sh
-. "$HOME/.cargo/env"
-```
+## Actualización desde 0.3.1
+
+La primera apertura de 0.4.0 convierte `projects.json` al modelo de proyectos con
+servicios y guarda una copia de la configuración anterior junto al archivo original.
+Se conservan los IDs de los servicios, comandos, variables de entorno, URLs e IP SSH.
+
+La conversión agrupa registros como **API RH** y **APP RH** cuando tienen el mismo
+nombre de proyecto, sus carpetas de servicio comparten una raíz y sus IP SSH son
+compatibles. También reconoce nombres como **CORE APP** y carpetas terminadas en
+`-api` o `-app`. Los registros que no se pueden agrupar con seguridad permanecen
+como proyectos independientes con un servicio. La migración no modifica las
+carpetas ni el código de los proyectos.
 
 ## Desarrollo
+
+Requiere Node.js 18 o posterior, Rust estable mediante [rustup](https://rustup.rs/)
+y las dependencias de sistema de Tauri 2 para la plataforma objetivo.
 
 ```sh
 npm install
@@ -48,31 +62,24 @@ cd src-tauri && cargo test && cargo check
 cd .. && npm run tauri build
 ```
 
-Los instaladores generados quedan bajo `src-tauri/target/release/bundle/`.
+Los instaladores quedan bajo `src-tauri/target/release/bundle/`. La arquitectura y
+los contratos están descritos en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
-## Semántica de parada
+## Parada de servicios
 
-Si un proyecto tiene `stopCommand`, Stop lo envía a stdin con un salto de línea y
-espera hasta 10 segundos. Si el proceso no finaliza, solicita la terminación de su
-grupo y después usa una terminación forzada. Sin `stopCommand`, comienza directamente
-con la terminación del sistema.
+Si un servicio tiene `stopCommand`, detenerlo envía esa línea a stdin y espera
+hasta 10 segundos. Si no finaliza, solicita la terminación de su grupo y después
+usa terminación forzada. Sin `stopCommand`, comienza con la terminación del sistema.
+Los procesos permanecen activos mientras Server Manager siga abierto en segundo
+plano; un cierre forzado de la aplicación no garantiza su continuidad ni su parada.
 
-En esta versión los procesos permanecen activos mientras Server Manager siga abierto
-en segundo plano. Sobrevivir al cierre forzado o a la salida total requerirá mover el
-motor a un daemon independiente.
+## Terminal local y SSH
 
-## Conexión SSH
+En macOS se abre Terminal; en Windows, una ventana de CMD; en Linux, una terminal
+instalada compatible. En macOS, la primera apertura puede pedir permiso para que
+Server Manager controle Terminal.
 
-Configura la **IP para SSH** (IPv4 o IPv6) al crear o editar cada proyecto. Después
-pulsa **Abrir terminal**, junto a **Abrir app**, para ejecutar `ssh root@<ip>` con
-esa IP. El botón se habilita cuando el proyecto tiene una IP guardada.
-La IP se valida al guardar y antes de abrir la terminal. Los proyectos anteriores
-siguen disponibles con el campo vacío. Las contraseñas, claves y confirmaciones
-de conexión se manejan directamente en el cliente SSH de la terminal.
-
-Se necesita tener instalado el cliente `ssh`. En macOS se abre Terminal; en
-Windows, una ventana de CMD; en Linux, una terminal instalada compatible.
-En macOS, la primera apertura puede pedir permiso para que Server Manager controle
-Terminal; concédelo para iniciar la sesión.
-Las sesiones SSH son independientes de los procesos locales administrados por
-Server Manager.
+La IP SSH es opcional y debe ser IPv4 o IPv6, sin usuario, puerto ni comandos.
+**Abrir servidor** requiere tener `ssh` instalado. Contraseñas, claves y
+confirmaciones se manejan directamente en el cliente SSH. Las sesiones externas
+son independientes de los procesos locales administrados por Server Manager.

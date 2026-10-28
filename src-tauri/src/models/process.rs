@@ -11,7 +11,7 @@ pub enum ProcessStatus {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessSnapshot {
-    pub project_id: String,
+    pub service_id: String,
     pub status: ProcessStatus,
     pub pid: Option<u32>,
     pub started_at: Option<String>,
@@ -20,7 +20,7 @@ pub struct ProcessSnapshot {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessStateEvent {
-    pub project_id: String,
+    pub service_id: String,
     pub status: ProcessStatus,
     pub pid: Option<u32>,
     pub started_at: Option<String>,
@@ -39,7 +39,7 @@ pub enum OutputStream {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProcessOutputEvent {
-    pub project_id: String,
+    pub service_id: String,
     pub stream: OutputStream,
     pub chunk: String,
     pub timestamp: String,
@@ -48,7 +48,7 @@ pub struct ProcessOutputEvent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ActionResult {
-    pub project_id: String,
+    pub service_id: String,
     pub ok: bool,
     pub message: String,
 }
