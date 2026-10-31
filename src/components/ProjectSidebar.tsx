@@ -1,3 +1,4 @@
+import { version } from "../../package.json";
 import type { ProcessSnapshot, ProjectConfig } from "../types/project";
 import { PlayIcon, PlusIcon, StopIcon } from "./Icons";
 import { StatusBadge } from "./StatusBadge";
@@ -86,7 +87,7 @@ export function ProjectSidebar({
       <button className="new-project-button" onClick={onCreate}>
         <PlusIcon /> Nuevo proyecto
       </button>
-      <div className="sidebar-version">Server Manager · 0.4.0</div>
+      <div className="sidebar-version">Server Manager · {version}</div>
     </aside>
   );
 }

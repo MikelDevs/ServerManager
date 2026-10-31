@@ -1,4 +1,4 @@
-# Server Manager — arquitectura 0.4.0
+# Server Manager — arquitectura 0.4.1
 
 ## Modelo
 
@@ -66,6 +66,40 @@ y `taskkill /T` como alternativa de parada.
 
 Las rutas se pasan como argumentos y se protegen de interpretación por el shell.
 Las terminales locales y sesiones SSH son externas al administrador de procesos.
+
+## Registro de aplicaciones en macOS
+
+`maintenance` consulta Launch Services y selecciona únicamente registros con el
+identificador exacto `com.lawcorp.servermanager`. Retira referencias a copias de la
+Papelera del usuario y a ubicaciones conocidas de instaladores que ya no existen.
+Las rutas cuyo estado no se puede comprobar se conservan. El modo de empaquetado
+puede incluir expresamente su `.app` generado bajo
+`src-tauri/target/[target]/release|debug/bundle/macos/`. La copia en ejecución y las
+instalaciones válidas se conservan. No se eliminan archivos ni se reinicia el
+registro global de aplicaciones.
+
+La copia instalada en `/Applications/Server Manager.app` o en la carpeta
+`Applications` del usuario inicia esta tarea en segundo plano. El modo CLI
+`--cleanup-app-registrations` se resuelve antes de inicializar Tauri o leer los
+proyectos y permite usar `--dry-run` y `--json` para diagnóstico. El resultado
+separa candidatos, referencias retiradas, registros conservados y fallos. Las
+referencias se consideran retiradas solo cuando una segunda consulta al registro
+confirma que ya no aparecen.
+
+`scripts/tauri.mjs` mantiene los argumentos y el código de salida del CLI oficial.
+Después de un `build` macOS que genera bundles, busca el binario en el layout
+conocido, comprueba el marcador `SERVER_MANAGER_MAINTENANCE_CLI_V1` sin ejecutarlo
+y confirma el modo de mantenimiento antes de invocar la limpieza. Esto evita
+abrir por accidente la interfaz de una versión antigua tras un build fallido.
+La limpieza posterior se intenta también tras errores de empaquetado si existe
+un binario compatible, y cualquier fallo se comunica sin ocultar el error
+original. Un empaquetado exitoso con limpieza fallida devuelve error.
+
+Este mantenimiento no garantiza que el buscador refresque su caché de inmediato
+y no funciona como un gancho de desinstalación al enviar el paquete a la Papelera.
+Si una copia `.app` sigue existiendo, macOS puede registrarla de nuevo al detectarla;
+el resultado describe las referencias verificadas en esa ejecución y no bloquea
+registros posteriores.
 
 ## Ventana y salida
 

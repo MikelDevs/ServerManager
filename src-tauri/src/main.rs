@@ -1,4 +1,6 @@
 mod commands;
+mod maintenance;
+mod maintenance_cli;
 mod models;
 mod services;
 mod state;
@@ -16,6 +18,9 @@ use tauri::{
 };
 
 fn main() {
+    if let Some(code) = maintenance_cli::run() {
+        std::process::exit(code);
+    }
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
@@ -24,6 +29,28 @@ fn main() {
             let repository = ProjectRepository::load(config_path)
                 .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
             app.manage(AppState::new(repository));
+
+            // Only installed copies perform background maintenance. Development and
+            // DMG copies stay untouched; the packaging wrapper cleans its own records.
+            #[cfg(target_os = "macos")]
+            if maintenance_cli::is_installed_app() {
+                tauri::async_runtime::spawn_blocking(|| {
+                    match maintenance::cleanup_app_registrations(maintenance::CleanupOptions {
+                        dry_run: false,
+                        build_bundle_path: None,
+                    }) {
+                        Ok(report) => {
+                            if !report.removed.is_empty() {
+                                eprintln!("Server Manager: se retiraron {} referencias antiguas de macOS", report.removed.len());
+                            }
+                            for failure in report.failures {
+                                eprintln!("Server Manager: {}: {}", failure.path, failure.message);
+                            }
+                        }
+                        Err(error) => eprintln!("Server Manager: no se pudo actualizar el registro de aplicaciones: {error}"),
+                    }
+                });
+            }
 
             let show_item =
                 MenuItem::with_id(app, "show", "Mostrar Server Manager", true, None::<&str>)?;

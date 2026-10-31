@@ -1,13 +1,14 @@
 {
   "name": "server-manager",
   "private": true,
-  "version": "0.4.0",
+  "version": "0.4.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "tauri"
+    "tauri": "node scripts/tauri.mjs",
+    "test:packaging": "node --test scripts/*.test.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.0.0",

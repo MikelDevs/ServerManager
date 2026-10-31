@@ -1,8 +1,29 @@
-# Server Manager 0.4.0
+# Server Manager 0.4.1
 
 Aplicación de escritorio para macOS, Windows y Linux que agrupa las APIs y apps
 locales bajo un solo proyecto. Cada servicio tiene su carpeta, comandos, variables,
 URL, proceso y consola independientes.
+
+## Novedad en 0.4.1: referencias antiguas en macOS
+
+Al abrir la copia instalada en `/Applications` o `~/Applications`, la aplicación
+retira en segundo plano las referencias antiguas de Server Manager registradas
+por macOS: copias de la Papelera e instaladores conocidos que ya no están montados.
+El empaquetado también retira el registro de la copia temporal que acaba de generar.
+
+La limpieza se limita al identificador `com.lawcorp.servermanager` y a esas rutas
+conocidas. Conserva la aplicación en ejecución, las instalaciones válidas y las
+rutas cuya condición no se puede comprobar. Verifica en una segunda consulta qué
+referencias se retiraron y comunica cualquier fallo; no
+borra archivos, proyectos o configuración ni detiene servicios. El paquete incluye
+además su icono de aplicación explícitamente.
+
+La búsqueda de macOS puede tardar en actualizar lo que muestra después de retirar
+una referencia. Mientras una copia `.app` siga existiendo, incluso en la Papelera,
+macOS puede registrarla de nuevo al detectarla. La limpieza retira las referencias
+presentes; no bloquea registros futuros. Esta mejora no ejecuta una desinstalación
+al mover la app a la Papelera: actúa al abrir una instalación válida y al generar
+el instalador.
 
 ## Un proyecto, varios servicios
 
@@ -37,7 +58,7 @@ bandeja. **Detener y salir** detiene los servicios antes de cerrar la aplicació
 
 ## Actualización desde 0.3.1
 
-La primera apertura de 0.4.0 convierte `projects.json` al modelo de proyectos con
+La primera apertura de 0.4.x convierte `projects.json` al modelo de proyectos con
 servicios y guarda una copia de la configuración anterior junto al archivo original.
 Se conservan los IDs de los servicios, comandos, variables de entorno, URLs e IP SSH.
 
@@ -62,12 +83,34 @@ npm run tauri dev
 
 ```sh
 npm run build
+npm run test:packaging
 cd src-tauri && cargo test && cargo check
 cd .. && npm run tauri build
 ```
 
 Los instaladores quedan bajo `src-tauri/target/release/bundle/`. La arquitectura y
 los contratos están descritos en [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+`npm run tauri build` usa el CLI oficial de Tauri a través de un wrapper local.
+En macOS, al terminar el empaquetado ejecuta el mantenimiento desde el binario
+compilado. También lo intenta si el empaquetado falla o se interrumpe, siempre que
+exista un binario con el modo de mantenimiento de 0.4.1 o posterior. Nunca ejecuta
+un binario anterior para intentar limpiar: esas versiones abrirían la interfaz al
+recibir argumentos desconocidos.
+
+Si Tauri falla, se conserva su código de salida. Si Tauri termina correctamente
+pero el mantenimiento falla, el comando informa que la limpieza está pendiente
+y devuelve error. Los comandos `dev`, ayuda, `--no-bundle` y las compilaciones en
+otros sistemas no ejecutan este mantenimiento. Se admiten los layouts estándar
+`src-tauri/target/[target]/release` y `debug` para los targets macOS; un
+`CARGO_TARGET_DIR` personalizado produce un aviso de limpieza no soportada y
+evita ejecutar un binario de una ruta supuesta.
+
+Para revisar qué referencias se limpiarían, sin cambiarlas:
+
+```sh
+./src-tauri/target/release/server-manager --cleanup-app-registrations --dry-run --json
+```
 
 ## Parada de servicios
 
